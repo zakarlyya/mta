@@ -1,0 +1,119 @@
+import Foundation
+import Observation
+
+@MainActor
+@Observable
+final class AppModel {
+    private static let watchesKey = "watches"
+    private static let refreshInterval: Duration = .seconds(30)
+    private static let tickInterval: Duration = .seconds(5)
+
+    var watches: [Watch] {
+        didSet {
+            save()
+            if watches != oldValue { Task { await refresh() } }
+        }
+    }
+
+    private(set) var arrivals: [Watch.ID: [Arrival]] = [:]
+    private(set) var lastUpdated: Date?
+    private(set) var errorMessage: String?
+    private(set) var now = Date()
+
+    init() {
+        if let data = UserDefaults.standard.data(forKey: Self.watchesKey),
+           let saved = try? JSONDecoder().decode([Watch].self, from: data) {
+            watches = saved
+        } else {
+            watches = [Watch(stationID: "A49", direction: .north, routes: ["A", "C"])]
+        }
+        start()
+    }
+
+    /// The first watch drives the menu bar countdown.
+    var primary: Watch? { watches.first }
+
+    func upcoming(for watch: Watch) -> [Arrival] {
+        (arrivals[watch.id] ?? []).filter { $0.time > now }
+    }
+
+    var menuBarTitle: String {
+        guard let primary else { return "MTA" }
+        guard let next = upcoming(for: primary).first else {
+            return lastUpdated == nil ? "…" : "—"
+        }
+        return "\(RouteStyle.displayName(next.route)) \(Self.countdown(to: next.time, from: now))"
+    }
+
+    static func countdown(to time: Date, from now: Date) -> String {
+        let minutes = Int(time.timeIntervalSince(now) / 60)
+        return minutes < 1 ? "now" : "\(minutes)m"
+    }
+
+    func pin(_ watch: Watch) {
+        guard let index = watches.firstIndex(of: watch) else { return }
+        watches.insert(watches.remove(at: index), at: 0)
+    }
+
+    func refresh() async {
+        let paths = Set(watches.flatMap { $0.routes.compactMap(GTFSFeed.path(for:)) })
+        var snapshots: [String: FeedSnapshot] = [:]
+        var failures = 0
+
+        await withTaskGroup(of: (String, FeedSnapshot?).self) { group in
+            for path in paths {
+                group.addTask { (path, try? await GTFSFeed.fetch(path: path)) }
+            }
+            for await (path, snapshot) in group {
+                if let snapshot { snapshots[path] = snapshot } else { failures += 1 }
+            }
+        }
+
+        guard paths.isEmpty || !snapshots.isEmpty else {
+            errorMessage = "Couldn't reach the MTA feed"
+            return
+        }
+
+        var result: [Watch.ID: [Arrival]] = [:]
+        for watch in watches {
+            let routes = Set(watch.routes)
+            var list: [Arrival] = []
+            for path in Set(watch.routes.compactMap(GTFSFeed.path(for:))) {
+                for trip in snapshots[path]?.trips ?? [] {
+                    let route = GTFSFeed.normalize(trip.routeID)
+                    guard routes.contains(route) else { continue }
+                    for stop in trip.stops where stop.stopID == watch.stopID {
+                        list.append(Arrival(route: route, time: Date(timeIntervalSince1970: TimeInterval(stop.time))))
+                    }
+                }
+            }
+            result[watch.id] = list.sorted { $0.time < $1.time }
+        }
+
+        arrivals = result
+        lastUpdated = Date()
+        now = Date()
+        errorMessage = failures > 0 ? "Some feeds failed to load" : nil
+    }
+
+    private func start() {
+        Task {
+            while !Task.isCancelled {
+                await refresh()
+                try? await Task.sleep(for: Self.refreshInterval)
+            }
+        }
+        Task {
+            while !Task.isCancelled {
+                try? await Task.sleep(for: Self.tickInterval)
+                now = Date()
+            }
+        }
+    }
+
+    private func save() {
+        if let data = try? JSONEncoder().encode(watches) {
+            UserDefaults.standard.set(data, forKey: Self.watchesKey)
+        }
+    }
+}
