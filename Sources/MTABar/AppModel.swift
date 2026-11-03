@@ -1,3 +1,4 @@
+import CoreLocation
 import Foundation
 import Observation
 
@@ -5,6 +6,8 @@ import Observation
 @Observable
 final class AppModel {
     private static let watchesKey = "watches"
+    private static let useNearestKey = "useNearest"
+    private static let nearbyRadius: CLLocationDistance = 1500
     private static let refreshInterval: Duration = .seconds(30)
     private static let tickInterval: Duration = .seconds(5)
 
@@ -27,11 +30,46 @@ final class AppModel {
         } else {
             watches = [Watch(stationID: "A49", direction: .north, routes: ["A", "C"])]
         }
+        useNearest = UserDefaults.standard.bool(forKey: Self.useNearestKey)
+        if useNearest { locationProvider.start() }
         start()
     }
 
-    /// The first watch drives the menu bar countdown.
-    var primary: Watch? { watches.first }
+    var useNearest: Bool {
+        didSet {
+            UserDefaults.standard.set(useNearest, forKey: Self.useNearestKey)
+            useNearest ? locationProvider.start() : locationProvider.stop()
+        }
+    }
+
+    let locationProvider = LocationProvider()
+
+    /// The watch shown in the menu bar: the nearest saved station when location is on and one is
+    /// within range, otherwise the pinned (first) watch.
+    var primary: Watch? {
+        guard useNearest, let location = locationProvider.location else { return watches.first }
+        let nearest = watches
+            .compactMap { watch in distance(to: watch, from: location).map { (watch, $0) } }
+            .min { $0.1 < $1.1 }
+        guard let nearest, nearest.1 <= Self.nearbyRadius else { return watches.first }
+        return nearest.0
+    }
+
+    /// True when the menu bar is following location rather than the pinned watch.
+    var primaryIsNearby: Bool { primary.map(isNearby) ?? false }
+
+    func distance(to watch: Watch) -> CLLocationDistance? {
+        guard useNearest, let location = locationProvider.location else { return nil }
+        return distance(to: watch, from: location)
+    }
+
+    private func distance(to watch: Watch, from location: CLLocation) -> CLLocationDistance? {
+        watch.station.map { location.distance(from: $0.location) }
+    }
+
+    private func isNearby(_ watch: Watch) -> Bool {
+        (distance(to: watch) ?? .infinity) <= Self.nearbyRadius
+    }
 
     func upcoming(for watch: Watch) -> [Arrival] {
         (arrivals[watch.id] ?? []).filter { $0.time > now }

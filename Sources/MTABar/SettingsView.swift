@@ -8,6 +8,7 @@ struct SettingsView: View {
     private let launchState = State(initialValue: SMAppService.mainApp.status == .enabled)
 
     private var query: String { queryState.wrappedValue }
+    private var results: [Station] { StationSearch.search(query) }
 
     var body: some View {
         @Bindable var model = model
@@ -19,34 +20,51 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                 }
                 ForEach($model.watches) { $watch in
-                    WatchEditor(watch: $watch, isPrimary: watch == model.primary)
+                    WatchEditor(watch: $watch, isPinned: watch == model.watches.first)
                 }
             } header: {
                 Text("Your trains")
             } footer: {
-                Text("The top entry is shown in the menu bar. Click a line to toggle it.")
+                Text(model.useNearest
+                     ? "The nearest saved station is shown in the menu bar. When none is within about a mile, the pinned one is."
+                     : "The pinned station is shown in the menu bar. Click a line to toggle it.")
                     .foregroundStyle(.secondary)
             }
 
-            Section("Add a station") {
-                TextField("Search stations", text: queryState.projectedValue)
-                ForEach(results) { station in
+            Section {
+                Toggle("Show the nearest saved station", isOn: $model.useNearest)
+                if model.useNearest, model.locationProvider.isDenied {
                     HStack {
-                        VStack(alignment: .leading) {
-                            Text(station.name)
-                            Text("\(station.line) · \(station.borough)")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
+                        Label("Location access is off for MTA Bar", systemImage: "location.slash")
+                            .foregroundStyle(.orange)
                         Spacer()
-                        HStack(spacing: 2) {
-                            ForEach(station.routes, id: \.self) { RouteBadge(route: $0, size: 16) }
-                        }
-                        Button("Add") {
-                            model.watches.append(Watch(stationID: station.id, direction: .north, routes: station.routes))
-                            queryState.wrappedValue = ""
+                        Button("Open Settings") {
+                            NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_LocationServices")!)
                         }
                     }
+                } else if model.useNearest, model.locationProvider.location == nil {
+                    Text("Finding your location…")
+                        .foregroundStyle(.secondary)
+                }
+            } header: {
+                Text("Location")
+            }
+
+            Section("Add a station") {
+                TextField("Search, e.g. “union square” or “57th st n”", text: queryState.projectedValue)
+                    .onSubmit {
+                        if let first = results.first { add(first) }
+                    }
+                if !query.trimmingCharacters(in: .whitespaces).isEmpty, results.isEmpty {
+                    Text("No stations match")
+                        .foregroundStyle(.secondary)
+                }
+                ForEach(results) { station in
+                    StationResultRow(
+                        station: station,
+                        isSaved: model.watches.contains { $0.stationID == station.id },
+                        add: { add(station) }
+                    )
                 }
             }
 
@@ -63,37 +81,64 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 460, height: 560)
+        .frame(width: 480, height: 620)
     }
 
-    private var results: [Station] {
-        let trimmed = query.trimmingCharacters(in: .whitespaces)
-        guard !trimmed.isEmpty else { return [] }
-        return Station.all
-            .filter { $0.name.localizedCaseInsensitiveContains(trimmed) }
-            .prefix(25)
-            .map { $0 }
+    private func add(_ station: Station) {
+        model.watches.append(Watch(stationID: station.id, direction: .north, routes: station.routes))
+        queryState.wrappedValue = ""
+    }
+}
+
+private struct StationResultRow: View {
+    let station: Station
+    let isSaved: Bool
+    let add: () -> Void
+
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading) {
+                Text(station.name)
+                Text(station.line)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            HStack(spacing: 2) {
+                ForEach(station.routes, id: \.self) { RouteBadge(route: $0, size: 16) }
+            }
+            Button(isSaved ? "Add again" : "Add", action: add)
+                .help(isSaved ? "Already saved. Add again to track the other direction." : "Add this station")
+        }
+        .contentShape(Rectangle())
+        .onTapGesture(count: 2, perform: add)
     }
 }
 
 private struct WatchEditor: View {
     @Environment(AppModel.self) private var model
     @Binding var watch: Watch
-    let isPrimary: Bool
+    let isPinned: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Text(watch.station?.name ?? watch.stationID)
                     .font(.headline)
+                if watch == model.primary, model.primaryIsNearby {
+                    Image(systemName: "location.fill")
+                        .foregroundStyle(.secondary)
+                        .help("Nearest saved station")
+                }
                 Spacer()
-                if isPrimary {
-                    Label("Menu bar", systemImage: "menubar.rectangle")
+                if isPinned {
+                    Label("Pinned", systemImage: "pin.fill")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 } else {
-                    Button("Show in menu bar") { model.pin(watch) }
+                    Button("Pin") { model.pin(watch) }
                         .controlSize(.small)
+                        .help("Show in the menu bar by default")
                 }
                 Button(role: .destructive) {
                     model.watches.removeAll { $0.id == watch.id }

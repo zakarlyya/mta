@@ -23,6 +23,8 @@ cat > "$APP/Contents/Info.plist" <<EOF
     <key>CFBundleVersion</key><string>1</string>
     <key>LSMinimumSystemVersion</key><string>15.0</string>
     <key>LSUIElement</key><true/>
+    <key>NSLocationUsageDescription</key><string>MTA Bar uses your location to show the next train from your nearest saved station.</string>
+    <key>NSLocationWhenInUseUsageDescription</key><string>MTA Bar uses your location to show the next train from your nearest saved station.</string>
 </dict>
 </plist>
 EOF

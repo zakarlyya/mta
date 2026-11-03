@@ -1,3 +1,4 @@
+import CoreLocation
 import Foundation
 import SwiftUI
 
@@ -7,8 +8,12 @@ struct Station: Decodable, Identifiable, Hashable {
     let line: String
     let borough: String
     let routes: [String]
+    let lat: Double
+    let lon: Double
     let north: String
     let south: String
+
+    var location: CLLocation { CLLocation(latitude: lat, longitude: lon) }
 
     static let all: [Station] = (try? JSONDecoder().decode([Station].self, from: Data(stationsJSON.utf8))) ?? []
     static let byID: [String: Station] = Dictionary(all.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })

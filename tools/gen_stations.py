@@ -53,6 +53,8 @@ def main():
             "line": r["Line"],
             "borough": r["Borough"],
             "routes": sorted(served, key=lambda x: ROUTE_ORDER.index(x) if x in ROUTE_ORDER else 99),
+            "lat": float(r["GTFS Latitude"]),
+            "lon": float(r["GTFS Longitude"]),
             "north": r["North Direction Label"] or "Northbound",
             "south": r["South Direction Label"] or "Southbound",
         })

@@ -72,9 +72,15 @@ private struct WatchSection: View {
                 Text(watch.title)
                     .font(.headline)
                 if isPrimary {
-                    Image(systemName: "menubar.rectangle")
+                    Image(systemName: model.primaryIsNearby ? "location.fill" : "menubar.rectangle")
                         .foregroundStyle(.secondary)
-                        .help("Shown in the menu bar")
+                        .help(model.primaryIsNearby ? "Nearest saved station, shown in the menu bar" : "Shown in the menu bar")
+                }
+                Spacer()
+                if let distance = model.distance(to: watch) {
+                    Text(Measurement(value: distance, unit: UnitLength.meters), format: .measurement(width: .abbreviated, usage: .road))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
             }
 
