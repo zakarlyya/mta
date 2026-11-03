@@ -45,16 +45,37 @@ struct SettingsView: View {
                 } else if model.useNearest, model.locationProvider.location == nil {
                     Text("Finding your location…")
                         .foregroundStyle(.secondary)
+                } else if model.useNearest, let primary = model.primary {
+                    Label(
+                        model.primaryIsNearby ? "Showing \(primary.station?.name ?? "") (nearest)" : "No saved station nearby, showing pinned",
+                        systemImage: model.primaryIsNearby ? "location.fill" : "pin.fill"
+                    )
+                    .foregroundStyle(.secondary)
                 }
             } header: {
                 Text("Location")
             }
 
             Section("Add a station") {
-                TextField("Search, e.g. “union square” or “57th st n”", text: queryState.projectedValue)
-                    .onSubmit {
-                        if let first = results.first { add(first) }
+                HStack(spacing: 6) {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundStyle(.secondary)
+                    TextField("Search", text: queryState.projectedValue, prompt: Text("Station, e.g. union sq or 57th st n"))
+                        .labelsHidden()
+                        .textFieldStyle(.plain)
+                        .onSubmit {
+                            if let first = results.first { add(first) }
+                        }
+                    if !query.isEmpty {
+                        Button {
+                            queryState.wrappedValue = ""
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
                     }
+                }
                 if !query.trimmingCharacters(in: .whitespaces).isEmpty, results.isEmpty {
                     Text("No stations match")
                         .foregroundStyle(.secondary)
@@ -81,7 +102,9 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 480, height: 620)
+        .frame(width: 480)
+        .frame(minHeight: 480, idealHeight: 620)
+        .animation(.snappy, value: model.watches)
     }
 
     private func add(_ station: Station) {
@@ -123,8 +146,15 @@ private struct WatchEditor: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text(watch.station?.name ?? watch.stationID)
-                    .font(.headline)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(watch.station?.name ?? watch.stationID)
+                        .font(.headline)
+                    if let station = watch.station {
+                        Text(station.line)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
                 if watch == model.primary, model.primaryIsNearby {
                     Image(systemName: "location.fill")
                         .foregroundStyle(.secondary)
@@ -165,8 +195,10 @@ private struct WatchEditor: View {
                             else { watch.routes.append(route) }
                         } label: {
                             RouteBadge(route: route, size: 24, dimmed: !selected)
+                                .animation(.snappy, value: selected)
                         }
                         .buttonStyle(.plain)
+                        .help(selected ? "Hide \(RouteStyle.displayName(route)) trains" : "Show \(RouteStyle.displayName(route)) trains")
                     }
                 }
             }

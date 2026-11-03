@@ -80,12 +80,24 @@ final class AppModel {
         guard let next = upcoming(for: primary).first else {
             return lastUpdated == nil ? "…" : "—"
         }
-        return "\(RouteStyle.displayName(next.route)) \(Self.countdown(to: next.time, from: now))"
+        let route = RouteStyle.displayName(next.route)
+        let minutes = Self.minutes(until: next.time, from: now)
+        return minutes < 1 ? "\(route) arriving" : "\(route) in \(minutes)m"
     }
 
-    static func countdown(to time: Date, from now: Date) -> String {
-        let minutes = Int(time.timeIntervalSince(now) / 60)
-        return minutes < 1 ? "now" : "\(minutes)m"
+    /// Watches ordered with the menu bar one first.
+    var displayOrder: [Watch] {
+        guard let primary else { return watches }
+        return [primary] + watches.filter { $0 != primary }
+    }
+
+    var isStale: Bool {
+        guard let lastUpdated else { return false }
+        return now.timeIntervalSince(lastUpdated) > 120
+    }
+
+    static func minutes(until time: Date, from now: Date) -> Int {
+        max(0, Int(time.timeIntervalSince(now) / 60))
     }
 
     func pin(_ watch: Watch) {
