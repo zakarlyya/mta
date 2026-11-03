@@ -47,7 +47,7 @@ final class StatusBarController: NSObject {
         guard let button = statusItem.button else { return }
         let text = model.menuBarText
         if let route = model.menuBarRoute {
-            button.image = badge(for: route)
+            button.image = badge(for: route, alert: model.primaryHasDisruption)
             button.title = " " + text
         } else {
             let symbol = NSImage(systemSymbolName: "tram.fill", accessibilityDescription: "Subway")
@@ -55,17 +55,27 @@ final class StatusBarController: NSObject {
             button.image = symbol
             button.title = " " + text
         }
-        button.setAccessibilityLabel([model.menuBarRoute.map { "\($0) train" }, text].compactMap(\.self).joined(separator: " "))
+        let parts = [
+            model.menuBarRoute.map { "\($0) train" },
+            text,
+            model.primaryHasDisruption ? "service alert" : nil,
+        ]
+        button.setAccessibilityLabel(parts.compactMap(\.self).joined(separator: ", "))
     }
 
-    private func badge(for route: String) -> NSImage {
-        if let cached = badgeCache[route] { return cached }
+    private func badge(for route: String, alert: Bool) -> NSImage {
+        let key = route + (alert ? "!" : "")
+        if let cached = badgeCache[key] { return cached }
         let name = RouteStyle.displayName(route)
         let fill = NSColor(RouteStyle.color(route))
         let textColor = NSColor(RouteStyle.textColor(route))
         let diameter: CGFloat = 16
+        let dot: CGFloat = 6.5
+        // Extra width/height so the alert dot can overhang the badge's top-right edge.
+        let canvas = NSSize(width: diameter + (alert ? 2 : 0), height: diameter + (alert ? 1 : 0))
 
-        let image = NSImage(size: NSSize(width: diameter, height: diameter), flipped: false) { rect in
+        let image = NSImage(size: canvas, flipped: false) { _ in
+            let rect = NSRect(x: 0, y: 0, width: diameter, height: diameter)
             fill.setFill()
             NSBezierPath(ovalIn: rect).fill()
             let font = NSFont.systemFont(ofSize: name.count > 1 ? 7.5 : 10.5, weight: .bold)
@@ -75,10 +85,19 @@ final class StatusBarController: NSObject {
                 at: NSPoint(x: rect.midX - size.width / 2, y: rect.midY - size.height / 2),
                 withAttributes: attributes
             )
+            if alert {
+                let dotRect = NSRect(x: canvas.width - dot, y: canvas.height - dot, width: dot, height: dot)
+                // Punch a transparent ring so the dot reads on any line color (including orange lines).
+                NSGraphicsContext.current?.compositingOperation = .clear
+                NSBezierPath(ovalIn: dotRect.insetBy(dx: -1.5, dy: -1.5)).fill()
+                NSGraphicsContext.current?.compositingOperation = .sourceOver
+                NSColor.systemOrange.setFill()
+                NSBezierPath(ovalIn: dotRect).fill()
+            }
             return true
         }
         image.isTemplate = false
-        badgeCache[route] = image
+        badgeCache[key] = image
         return image
     }
 

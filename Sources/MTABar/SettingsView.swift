@@ -31,7 +31,12 @@ struct SettingsView: View {
                     Text("Follow my location")
                     Text("Show whichever saved station you’re closest to. If none are nearby, your pinned station is shown.")
                 }
-                if model.useNearest, model.locationProvider.isDenied {
+                Toggle(isOn: $model.onlyCatchable) {
+                    Text("Only show trains I can catch")
+                    Text("Uses your walking time to hide trains you’d miss. Trains you can make if you hurry are marked.")
+                }
+                let usesLocation = model.useNearest || model.onlyCatchable
+                if usesLocation, model.locationProvider.isDenied {
                     HStack {
                         Label("Location access is off for MTA Bar", systemImage: "location.slash")
                             .foregroundStyle(.orange)
@@ -40,7 +45,7 @@ struct SettingsView: View {
                             NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_LocationServices")!)
                         }
                     }
-                } else if model.useNearest, model.locationProvider.location == nil {
+                } else if usesLocation, model.locationProvider.location == nil {
                     Text("Finding your location…")
                         .foregroundStyle(.secondary)
                 } else if model.useNearest, let primary = model.primary {

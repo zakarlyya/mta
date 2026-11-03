@@ -8,6 +8,7 @@ final class LocationProvider: NSObject, CLLocationManagerDelegate {
     private(set) var status: CLAuthorizationStatus
 
     @ObservationIgnored private let manager = CLLocationManager()
+    @ObservationIgnored var onUpdate: ((CLLocation) -> Void)?
 
     override init() {
         status = manager.authorizationStatus
@@ -35,7 +36,9 @@ final class LocationProvider: NSObject, CLLocationManagerDelegate {
         guard let latest = locations.last else { return }
         let coordinate = latest.coordinate
         Task { @MainActor in
-            self.location = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
+            let location = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
+            self.location = location
+            self.onUpdate?(location)
         }
     }
 
