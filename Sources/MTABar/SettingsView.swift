@@ -24,15 +24,13 @@ struct SettingsView: View {
                 }
             } header: {
                 Text("Your trains")
-            } footer: {
-                Text(model.useNearest
-                     ? "The nearest saved station is shown in the menu bar. When none is within about a mile, the pinned one is."
-                     : "The pinned station is shown in the menu bar. Click a line to toggle it.")
-                    .foregroundStyle(.secondary)
             }
 
             Section {
-                Toggle("Show the nearest saved station", isOn: $model.useNearest)
+                Toggle(isOn: $model.useNearest) {
+                    Text("Follow my location")
+                    Text("Show whichever saved station you’re closest to. If none are nearby, your pinned station is shown.")
+                }
                 if model.useNearest, model.locationProvider.isDenied {
                     HStack {
                         Label("Location access is off for MTA Bar", systemImage: "location.slash")
@@ -47,7 +45,7 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                 } else if model.useNearest, let primary = model.primary {
                     Label(
-                        model.primaryIsNearby ? "Showing \(primary.station?.name ?? "") (nearest)" : "No saved station nearby, showing pinned",
+                        model.primaryIsNearby ? "Now showing \(primary.station?.name ?? "your nearest station")" : "No saved stations nearby, showing your pinned station",
                         systemImage: model.primaryIsNearby ? "location.fill" : "pin.fill"
                     )
                     .foregroundStyle(.secondary)
