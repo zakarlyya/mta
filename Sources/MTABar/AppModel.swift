@@ -75,14 +75,18 @@ final class AppModel {
         (arrivals[watch.id] ?? []).filter { $0.time > now }
     }
 
-    var menuBarTitle: String {
+    /// The route of the next train in the menu bar, drawn as a colored badge.
+    var menuBarRoute: String? {
+        primary.flatMap { upcoming(for: $0).first?.route }
+    }
+
+    var menuBarText: String {
         guard let primary else { return "MTA" }
         guard let next = upcoming(for: primary).first else {
             return lastUpdated == nil ? "…" : "—"
         }
-        let route = RouteStyle.displayName(next.route)
         let minutes = Self.minutes(until: next.time, from: now)
-        return minutes < 1 ? "\(route) arriving" : "\(route) in \(minutes)m"
+        return minutes < 1 ? "arriving" : "in \(minutes)m"
     }
 
     /// Watches ordered with the menu bar one first.

@@ -2,7 +2,7 @@ import SwiftUI
 
 struct MenuView: View {
     @Environment(AppModel.self) private var model
-    @Environment(\.openWindow) private var openWindow
+    let openSettings: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -32,11 +32,6 @@ struct MenuView: View {
         .padding(12)
         .frame(width: 320)
         .animation(.snappy, value: model.displayOrder)
-    }
-
-    private func openSettings() {
-        openWindow(id: "settings")
-        NSApp.activate()
     }
 }
 
